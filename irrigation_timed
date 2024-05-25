@@ -1,5 +1,5 @@
 /* 
-  v2
+  v3
   Arduino irrigation system
   Timer based 
 */
@@ -45,21 +45,21 @@
     #include <EEPROM.h>
 
     // the current address in the EEPROM (i.e. which byte we're going to write to next)
-    int addr = 24;
+    int addr = 0;
 
   /* other global variables */
 
     // initialize the interface pin for Relay
-    int RelayPin = 0; 
+    int RelayPin = 6; 
 
     // watering controls
     int wateringhour = 7; // watering time, (7:00 o'clock in the morning, in 24h time format)
     int wateringinterval = 2; // how many days between watering 
-    float wateringlength = 2600; //amount of time to water (run pump 2.6 seconds to deliver 2.50 fluid ounces)
+    int wateringlength = 2600; //amount of time to water (run pump 2.6 seconds to deliver 2.50 fluid ounces)
     int wateringcount = 0; // set watering count to 0
 
     // Set times in Global
-    DateTime now;
+    DateTime current;
     DateTime future;
 
 void setup () {
@@ -99,47 +99,12 @@ void setup () {
     }
 
     // Get the time
-    now = rtc.now();
+    current = rtc.now();
     // Set initial future time for watering
-    future = (now + TimeSpan(wateringinterval,0,0,0));
+    future = (current + TimeSpan(0,0,0,0));  // set to current time to trigger watering the next day after starting code, 
+                                             // otherwise use (current + TimeSpan(wateringinterval,0,0,0))
     
   /* LCD code, again */
-  /* update LCD */
-    // print date and time of last watering, and number of times the plant was watered
-
-    // clear the screen
-    lcd.clear();
-    lcd.setCursor(0, 0);
-
-    if (now.month() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.month(), DEC);
-    lcd.print('/');
-    if (now.day() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.day(), DEC);
-    lcd.print(" ");
-    if (now.hour() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.hour(), DEC);
-    lcd.print(':');
-    if (now.minute() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.minute(), DEC);
-
-    lcd.setCursor(0, 1);
-    lcd.print("Temp: ");
-    byte celsius = (rtc.getTemperature());
-    byte fahrenheit = (celsius * 9) / 5 + 32;
-    lcd.print (fahrenheit);
-    lcd.print(" F");
-
-    delay(3000);
-
     // clear the screen
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -148,58 +113,35 @@ void setup () {
 
     // clear the screen
     lcd.clear();
-
+ 
     // set LCD cursor to column 0, line 0 
-    // LCD has 16 characters and 2 rows
-    // line 0 is the first row, line 1 is the second row
+    // print the currnet time 
     lcd.setCursor(0, 0);
-
-    if (now.month() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.month(), DEC);
-    lcd.print('/');
-    if (now.day() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.day(), DEC);
-    lcd.print(" ");
-    if (now.hour() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.hour(), DEC);
-    lcd.print(':');
-    if (now.minute() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.minute(), DEC);
-
-    // print the number of time the plant has been watered
+    printCurrentDateime ();
 
     // set LCD cursor to column 0, line 1 
+    // print the number of time the plant has been watered
     lcd.setCursor(0, 1);
-    lcd.print("Count: ");
-    lcd.print (wateringcount);
-
+    printWateringCount();
 }
 
 void loop () {
 
   //get the time
-  now = rtc.now();
+  current = rtc.now();
 
     Serial.print("Current date: ");
-    Serial.print(now.year(), DEC);
+    Serial.print(current.year(), DEC);
     Serial.print('/');
-    Serial.print(now.month(), DEC);
+    Serial.print(current.month(), DEC);
     Serial.print('/');
-    Serial.print(now.day(), DEC);
+    Serial.print(current.day(), DEC);
     Serial.print(", Current time: ");
-    Serial.print(now.hour(), DEC);
+    Serial.print(current.hour(), DEC);
     Serial.print(':');
-    Serial.print(now.minute(), DEC);
+    Serial.print(current.minute(), DEC);
     Serial.print(':');
-    Serial.print(now.second(), DEC);
+    Serial.print(current.second(), DEC);
     Serial.println();
 
     Serial.print("Future date set to (+");
@@ -222,9 +164,11 @@ void loop () {
     Serial.println (wateringcount);
 
   // check if it is time to water the plant
-  if(now.month() >= future.month() && now.day() >= future.day() && now.hour() == wateringhour){
+  if(current.month() >= future.month() && current.day() >= future.day() && current.hour() == wateringhour){
 
     /* Water the plant */
+    // clear the screen
+    lcd.clear();
 
     // Turn on the relay to water plant
     digitalWrite(RelayPin, HIGH);
@@ -237,58 +181,38 @@ void loop () {
     wateringcount = wateringcount + 1;
 
     /* calculate next watering time, a date in the future equal to the currnet day + number of days set in wateringinterval */
-    now = (now);
-    future = (now + TimeSpan(wateringinterval,0,0,0));
+    future = (current + TimeSpan(wateringinterval,0,0,0));
 
     /* update LCD */
     // print date and time of last watering, and number of times the plant was watered
 
     // clear the screen
     lcd.clear();
+    delay(1000);
+    lcd.begin(16, 2);
 
     // set LCD cursor to column 0, line 0 
     // LCD has 16 characters and 2 rows
     // line 0 is the first row, line 1 is the second row
     lcd.setCursor(0, 0);
-
-    if (now.month() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.month(), DEC);
-    lcd.print('/');
-    if (now.day() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.day(), DEC);
-    lcd.print(" ");
-    if (now.hour() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.hour(), DEC);
-    lcd.print(':');
-    if (now.minute() < 10){
-      lcd.print('0');
-    }
-    lcd.print(now.minute(), DEC);
+    printCurrentDateime();
 
     // print the number of time the plant has been watered
-
     // set LCD cursor to column 0, line 1 
     lcd.setCursor(0, 1);
-    lcd.print("Count: ");
-    lcd.print (wateringcount);
+    printWateringCount ();
 
     /* write data to EEPROM, date/time of each watering */
     // build a string combining the data and converting to binary to save space
     String data = "";
-    if (now.month() < 10){ data += ('0'); }
-    data += String(now.month(), DEC); 
-    if (now.day() < 10){ data += ('0'); }
-    data += String(now.day(), DEC); 
-    if (now.hour() < 10){ data += ('0'); }
-    data += String(now.hour(), DEC);
-    if (now.minute() < 10){ data += ('0'); }
-    data += String(now.minute(), DEC);
+    if (current.month() < 10){ data += ('0'); }
+    data += String(current.month(), DEC); 
+    if (current.day() < 10){ data += ('0'); }
+    data += String(current.day(), DEC); 
+    if (current.hour() < 10){ data += ('0'); }
+    data += String(current.hour(), DEC);
+    if (current.minute() < 10){ data += ('0'); }
+    data += String(current.minute(), DEC);
 
    // Write the string data to EEPROM
     for (int i = 0; i < data.length(); i++) {
@@ -305,4 +229,44 @@ void loop () {
 
  delay(1000);
  
+}
+
+void printCurrentDateime () {
+    // month
+    if (current.month() < 10){
+      lcd.print('0');
+    }
+    lcd.print(current.month(), DEC);
+    lcd.print('/');
+    // day
+    if (current.day() < 10){
+      lcd.print('0');
+    }
+    lcd.print(current.day(), DEC);
+    lcd.print(" ");
+    // hour
+    if (current.hour() < 10){
+      lcd.print('0');
+    }
+    lcd.print(current.hour(), DEC);
+    lcd.print(':');
+    //minute
+    if (current.minute() < 10){
+      lcd.print('0');
+    }
+    
+    lcd.print(current.minute(), DEC);
+}
+
+void printTemp () {
+  lcd.print("Temp: ");
+    byte celsius = (rtc.getTemperature());
+    byte fahrenheit = (celsius * 9) / 5 + 32;
+    lcd.print (fahrenheit);
+    lcd.print(" F");
+}
+
+void printWateringCount () {
+    lcd.print("Count: ");
+    lcd.print (wateringcount);
 }
