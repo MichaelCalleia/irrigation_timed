@@ -1,0 +1,244 @@
+/* 
+  v1
+  Arduino irrigation system
+  Timer based 
+*/
+
+
+/* global settings */
+
+  /* Real Time Clock (RTC) Library 
+  Date and time functions using a DS3231 RTC connected via I2C and Wire lib
+  */
+    // include the library code:
+    #include "RTClib.h"
+
+    RTC_DS3231 rtc;
+
+  /*  Liquid Crystal Display (LCD) Library
+    The circuit:
+    * LCD RS pin to digital pin 12
+    * LCD Enable pin to digital pin 11
+    * LCD D4 pin to digital pin 5
+    * LCD D5 pin to digital pin 4
+    * LCD D6 pin to digital pin 3
+    * LCD D7 pin to digital pin 2
+    * LCD R/W pin to ground
+    * LCD VSS pin to ground
+    * LCD VDD pin to 5V
+    * 10K resistor:
+    * ends to +5V and ground
+    * wiper to LCD VO pin (pin 3)
+
+    https://docs.arduino.cc/learn/electronics/lcd-displays
+    */
+    // include the library code:
+    #include <LiquidCrystal.h>
+
+    // initialize the library by associating any needed LCD interface pin
+    // with the arduino pin number it is connected to
+    const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+    LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+  /* EEPROM library */
+    // include EEPROM library
+    #include <EEPROM.h>
+
+    // the current address in the EEPROM (i.e. which byte we're going to write to next)
+    int addr = 0;
+
+  /* other global variables */
+
+    // initialize the interface pin for Relay
+    int RelayPin = 6; 
+
+    // watering controls
+    int wateringhour = 7; // watering time, (7:00 o'clock in the morning, in 24h time format)
+    int wateringinterval = 2; // how many days between watering 
+    float wateringlength = 2600; //amount of time to water (run pump 2.6 seconds to deliver 2.50 fluid ounces)
+    int wateringcount = 0; // set watering count to 0
+
+    // Set future watering time in Global
+    DateTime now;
+    DateTime future;
+
+void setup () {
+  Serial.begin(9600);
+
+  /* LCD code */
+    // set up the LCD's number of columns and rows:
+    lcd.begin(16, 2);
+
+    // clear the screen
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Initializing...");
+    delay(3000); // pause to show message for 3 seconds
+    lcd.clear();
+
+  /* RTC code */
+    #ifndef ESP8266
+      while (!Serial); // wait for serial port to connect. Needed for native USB
+    #endif
+
+    if (! rtc.begin()) {
+      Serial.println("Couldn't find RTC");
+      Serial.flush();
+      while (1) delay(10);
+    }
+
+    if (rtc.lostPower()) {
+      Serial.println("RTC lost power, let's set the time!");
+      // When time needs to be set on a new device, or after a power loss, the
+      // following line sets the RTC to the date & time this sketch was compiled
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+
+        DateTime now = rtc.now();
+        // Set initial future time for watering
+        DateTime future (now + TimeSpan(0,0,0,0));
+
+        // Show the current time to make sure RTC and LCD is working
+        lcd.setCursor(0, 0);
+
+        if (now.month() < 10){
+          lcd.print('0');
+        }
+        lcd.print(now.month(), DEC);
+        lcd.print('/');
+        if (now.day() < 10){
+          lcd.print('0');
+        }
+        lcd.print(now.day(), DEC);
+        lcd.print(" ");
+        if (now.hour() < 10){
+          lcd.print('0');
+        }
+        lcd.print(now.hour(), DEC);
+        lcd.print(':');
+        if (now.minute() < 10){
+          lcd.print('0');
+        }
+        lcd.print(now.minute(), DEC);
+
+        lcd.setCursor(0, 1);
+        lcd.print("Temp: ");
+        byte celsius = (rtc.getTemperature());
+        byte fahrenheit = (celsius * 9) / 5 + 32;
+        lcd.print (fahrenheit);
+        lcd.print(" F");
+
+    delay(3000);
+
+  /* Relay code */
+    // Set RelayPin as an output pin
+      pinMode(RelayPin, OUTPUT);
+
+  /* LCD code, again */
+
+    // clear the screen
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Ready");
+    delay(3000); // pause to show message for 3 seconds
+
+}
+
+void loop () {
+
+  //get the time
+  DateTime now = rtc.now();
+
+  // check if it is time to water the plant
+  if(now >= future && now.hour() == wateringhour){
+
+    /* Water the plant */
+
+    // Turn on the relay to water plant
+    digitalWrite(RelayPin, HIGH);
+    delay(wateringlength); // run pump for wateringlength
+
+    // Turn off the relay
+    digitalWrite(RelayPin, LOW);
+
+    /* Add +1 to number of time the plant has been watered */
+    wateringcount = wateringcount + 1;
+
+    /* calculate next watering time, a date in the future equal to the currnet day + number of days set in wateringinterval */
+    future = (now + TimeSpan(wateringinterval,0,0,0));
+
+    /* update LCD */
+    // print date and time of last watering, and number of times the plant was watered
+
+    // clear the screen
+    lcd.clear();
+
+    // set LCD cursor to column 0, line 0 
+    // LCD has 16 characters and 2 rows
+    // line 0 is the first row, line 1 is the second row
+    lcd.setCursor(0, 0);
+
+    if (now.month() < 10){
+      lcd.print('0');
+    }
+    lcd.print(now.month(), DEC);
+    lcd.print('/');
+    if (now.day() < 10){
+      lcd.print('0');
+    }
+    lcd.print(now.day(), DEC);
+    lcd.print(" ");
+    if (now.hour() < 10){
+      lcd.print('0');
+    }
+    lcd.print(now.hour(), DEC);
+    lcd.print(':');
+    if (now.minute() < 10){
+      lcd.print('0');
+    }
+    lcd.print(now.minute(), DEC);
+
+    // print the number of time the plant has been watered
+
+    // set LCD cursor to column 0, line 1 
+    lcd.setCursor(0, 1);
+    lcd.print("Count: " + wateringcount);
+
+    /* write data to EEPROM, date/time of each watering */
+    // build a string combining the data and converting to binary to save space
+    String val = String(now.month(), BIN) + String(now.day(), BIN) + String(now.hour(), BIN) + String(now.minute(), BIN);
+
+    // Convert the binary string to actual binary data
+    byte binaryData[20]; // Adjust size according to your needs
+    int binaryDataLength = 0; // This will be set by the conversion function
+    binaryStringToByteArray(val, binaryData, binaryDataLength);
+
+    // Write the binary data to EEPROM
+    for (int i = 0; i < binaryDataLength; i++) {
+      EEPROM.put(addr + i, binaryData[i]);
+    }
+
+    // Update the start address for next write to avoid overwriting
+    addr += binaryDataLength;
+    if (addr >= EEPROM.length() - binaryDataLength) { // Check to avoid EEPROM overflow
+      addr = 0; // Reset address or handle as needed
+    }
+
+  }
+
+ delay(1000);
+ 
+}
+
+// Function to convert binary string to byte array
+void binaryStringToByteArray(String binaryString, byte* byteArray, int &length) {
+  length = (binaryString.length() + 7) / 8; // Calculate the number of bytes needed
+  for (int i = 0; i < length; i++) {
+    byteArray[i] = 0; // Initialize byte
+    for (int bit = 0; bit < 8; bit++) {
+      if (i * 8 + bit < binaryString.length() && binaryString[i * 8 + bit] == '1') {
+        byteArray[i] |= (1 << (7 - bit)); // Set bit
+      }
+    }
+  }
+}
